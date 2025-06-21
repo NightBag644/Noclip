@@ -1,73 +1,116 @@
--- Services
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
 
--- Player and Character Variables
-local LocalPlayer = Players.LocalPlayer
-local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-local Humanoid = Character:WaitForChild("Humanoid")
+local LocalPlayer = Players.LocalPlayer or Players.PlayerAdded:Wait()
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
--- Noclip State
+local Character
+local Humanoid
+local HumanoidRootPart
+
+local function InitializeCharacter()
+    Character = LocalPlayer.Character
+    if not Character then
+        Character = LocalPlayer.CharacterAdded:Wait()
+    end
+    Humanoid = Character:WaitForChild("Humanoid")
+    HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
+end
+
+InitializeCharacter()
+
 local IsNoclipping = false
-local OriginalWalkSpeed = Humanoid.WalkSpeed -- Stores your character's default walk speed
+local OriginalWalkSpeed = Humanoid.WalkSpeed or 16
 
---- Toggles collisions for all character parts
--- @param canCollide boolean - true to enable collisions, false to disable
-local function SetCollisions(canCollide)
+local NoclipGui
+local NoclipButton
+
+local function SetCharacterCollisions(canCollide)
     if Character then
         for _, part in ipairs(Character:GetDescendants()) do
-            -- Only affect BaseParts (e.g., MeshPart, Part, UnionOperation)
             if part:IsA("BasePart") then
-                part.CanCollide = canCollide
-                -- If you want to also affect the HumanoidRootPart's network ownership for smoother movement
-                -- if part.Name == "HumanoidRootPart" then
-                --     part:SetNetworkOwner(LocalPlayer)
-                -- end
+                pcall(function()
+                    part.CanCollide = canCollide
+                end)
             end
         end
     end
 end
 
---- Toggles the noclip state on or off
 local function ToggleNoclip()
-    -- Ensure the character and humanoid exist before proceeding
-    if not Character or not Humanoid then return end
+    InitializeCharacter()
+    if not Character or not Humanoid or not HumanoidRootPart then return end
 
     IsNoclipping = not IsNoclipping
 
     if IsNoclipping then
-        -- Enable Noclip:
-        OriginalWalkSpeed = Humanoid.WalkSpeed -- Save current walk speed
-        Humanoid.WalkSpeed = 50 -- Increase speed for faster navigation while noclipping
-        SetCollisions(false) -- Disable collisions for all character parts
-        print("Noclip Enabled! Press 'E' again to disable.")
+        OriginalWalkSpeed = Humanoid.WalkSpeed
+        Humanoid.WalkSpeed = 60
+        Humanoid.Sit = false
+        Humanoid.PlatformStand = true
+        SetCharacterCollisions(false)
+        HumanoidRootPart.CanCollide = false
+        NoclipButton.Text = "Noclip ON"
+        NoclipButton.BackgroundColor3 = Color3.fromRGB(85, 255, 0)
+        print("[Noclip] Noclip Diaktifkan!")
     else
-        -- Disable Noclip:
-        SetCollisions(true) -- Re-enable collisions for all character parts
-        Humanoid.WalkSpeed = OriginalWalkSpeed -- Restore original walk speed
-        print("Noclip Disabled!")
+        SetCharacterCollisions(true)
+        HumanoidRootPart.CanCollide = true
+        Humanoid.PlatformStand = false
+        Humanoid.WalkSpeed = OriginalWalkSpeed
+        NoclipButton.Text = "Noclip OFF"
+        NoclipButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+        print("[Noclip] Noclip Dinonaktifkan!")
     end
 end
 
--- Input Handling: Bind 'E' key to toggle noclip
-UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
-    -- Ignore inputs that are processed by Roblox's game controls (e.g., typing in chat)
-    if gameProcessedEvent then return end
+local function CreateNoclipGUI()
+    NoclipGui = Instance.new("ScreenGui")
+    NoclipGui.Name = "NoclipToggleGUI"
+    NoclipGui.Parent = PlayerGui
 
-    if input.KeyCode == Enum.KeyCode.E then
-        ToggleNoclip()
+    NoclipButton = Instance.new("TextButton")
+    NoclipButton.Name = "ToggleButton"
+    NoclipButton.Size = UDim2.new(0.25, 0, 0.1, 0)
+    NoclipButton.Position = UDim2.new(0.72, 0, 0.05, 0)
+    NoclipButton.Text = "Noclip OFF"
+    NoclipButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    NoclipButton.TextSize = 22
+    NoclipButton.Font = Enum.Font.SourceSansBold
+    NoclipButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+    NoclipButton.BorderSizePixel = 0
+    NoclipButton.CornerRadius = UDim.new(0.1, 0)
+    NoclipButton.Parent = NoclipGui
+
+    NoclipButton.Activated:Connect(ToggleNoclip)
+end
+
+RunService.Stepped:Connect(function()
+    if IsNoclipping and Character and HumanoidRootPart then
+        pcall(function()
+            HumanoidRootPart.CanCollide = false
+        end)
     end
 end)
 
--- Reset Noclip state if character respawns (e.g., after dying)
 LocalPlayer.CharacterAdded:Connect(function(newCharacter)
     Character = newCharacter
-    Humanoid = Character:WaitForChild("Humanoid")
-    -- Ensure collisions are enabled and speed is reset for the new character
-    Humanoid.WalkSpeed = OriginalWalkSpeed
-    SetCollisions(true)
+    InitializeCharacter()
+    
+    OriginalWalkSpeed = Humanoid.WalkSpeed
+    SetCharacterCollisions(true)
+    HumanoidRootPart.CanCollide = true
+    Humanoid.PlatformStand = false
     IsNoclipping = false
-    print("Character reloaded. Noclip state reset.")
+    
+    if NoclipButton then
+        NoclipButton.Text = "Noclip OFF"
+        NoclipButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+    end
+    print("[Noclip] Karakter di-respawn. Status Noclip direset.")
 end)
 
-print("Noclip script loaded for game testing. Press 'E' to toggle noclip.")
+CreateNoclipGUI()
+
+print("[Noclip] Skrip Noclip (Robust) dimuat. Ketuk tombol 'Noclip OFF/ON' di layar.")
