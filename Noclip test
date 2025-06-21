@@ -1,0 +1,73 @@
+-- Services
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+
+-- Player and Character Variables
+local LocalPlayer = Players.LocalPlayer
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local Humanoid = Character:WaitForChild("Humanoid")
+
+-- Noclip State
+local IsNoclipping = false
+local OriginalWalkSpeed = Humanoid.WalkSpeed -- Stores your character's default walk speed
+
+--- Toggles collisions for all character parts
+-- @param canCollide boolean - true to enable collisions, false to disable
+local function SetCollisions(canCollide)
+    if Character then
+        for _, part in ipairs(Character:GetDescendants()) do
+            -- Only affect BaseParts (e.g., MeshPart, Part, UnionOperation)
+            if part:IsA("BasePart") then
+                part.CanCollide = canCollide
+                -- If you want to also affect the HumanoidRootPart's network ownership for smoother movement
+                -- if part.Name == "HumanoidRootPart" then
+                --     part:SetNetworkOwner(LocalPlayer)
+                -- end
+            end
+        end
+    end
+end
+
+--- Toggles the noclip state on or off
+local function ToggleNoclip()
+    -- Ensure the character and humanoid exist before proceeding
+    if not Character or not Humanoid then return end
+
+    IsNoclipping = not IsNoclipping
+
+    if IsNoclipping then
+        -- Enable Noclip:
+        OriginalWalkSpeed = Humanoid.WalkSpeed -- Save current walk speed
+        Humanoid.WalkSpeed = 50 -- Increase speed for faster navigation while noclipping
+        SetCollisions(false) -- Disable collisions for all character parts
+        print("Noclip Enabled! Press 'E' again to disable.")
+    else
+        -- Disable Noclip:
+        SetCollisions(true) -- Re-enable collisions for all character parts
+        Humanoid.WalkSpeed = OriginalWalkSpeed -- Restore original walk speed
+        print("Noclip Disabled!")
+    end
+end
+
+-- Input Handling: Bind 'E' key to toggle noclip
+UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
+    -- Ignore inputs that are processed by Roblox's game controls (e.g., typing in chat)
+    if gameProcessedEvent then return end
+
+    if input.KeyCode == Enum.KeyCode.E then
+        ToggleNoclip()
+    end
+end)
+
+-- Reset Noclip state if character respawns (e.g., after dying)
+LocalPlayer.CharacterAdded:Connect(function(newCharacter)
+    Character = newCharacter
+    Humanoid = Character:WaitForChild("Humanoid")
+    -- Ensure collisions are enabled and speed is reset for the new character
+    Humanoid.WalkSpeed = OriginalWalkSpeed
+    SetCollisions(true)
+    IsNoclipping = false
+    print("Character reloaded. Noclip state reset.")
+end)
+
+print("Noclip script loaded for game testing. Press 'E' to toggle noclip.")
